@@ -1,0 +1,16 @@
+.idea/
+.gradle/
+.kotlin/
+.intellijPlatform/
+.DS_Store
+*.iml
+*.ipr
+*.iws
+.run/
+gradle/wrapper/dists/
+docs
+node_modules/
+build/
+out/
+branch-mapping.json
+git-branch-mapping.json
