@@ -45,6 +45,18 @@ intellijPlatform {
     }
 }
 
+val jetbrainsReleaseDir = layout.projectDirectory.dir("releases/jetbrains")
+
+tasks.register<Copy>("publishJetBrainsPackage") {
+    group = "distribution"
+    description = "Build JetBrains plugin and copy zip packages to releases/jetbrains"
+    dependsOn("buildPlugin")
+    from(layout.buildDirectory.dir("distributions")) {
+        include("*.zip")
+    }
+    into(jetbrainsReleaseDir)
+}
+
 kotlin {
     jvmToolchain(21)
 }
