@@ -2,12 +2,17 @@ package com.branchmapping.plugin.data
 
 import com.branchmapping.plugin.model.BranchMappingItem
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.VfsUtil
+import java.time.Instant
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 class BranchMappingFileRepository {
 
@@ -36,17 +41,19 @@ class BranchMappingFileRepository {
 
         return runCatching {
             val currentMapping = readMapping(filePath)
-            val nextMapping = linkedMapOf<String, String>()
-            nextMapping[branchName] = requirementName
-            currentMapping.forEach { (currentBranchName, currentRequirementName) ->
+            val nextMapping = linkedMapOf<String, MappingValue>()
+            nextMapping[branchName] = MappingValue(
+                requirementName = requirementName,
+                updatedAt = Instant.now().toString(),
+            )
+            currentMapping.forEach { (currentBranchName, currentValue) ->
                 if (currentBranchName != branchName) {
-                    nextMapping[currentBranchName] = currentRequirementName
+                    nextMapping[currentBranchName] = currentValue
                 }
             }
 
             val content = json.encodeToString(nextMapping)
             Files.writeString(filePath, content, StandardCharsets.UTF_8)
-            VfsUtil.markDirtyAndRefresh(false, false, false, filePath.toFile())
             SaveResult.Success(1)
         }.getOrElse { error ->
             SaveResult.Failure("写入文件失败：${error.message ?: "未知错误"}")
@@ -61,13 +68,13 @@ class BranchMappingFileRepository {
 
         return runCatching {
             val targetBranchNames = branchNames.toSet()
-            val nextMapping = linkedMapOf<String, String>()
+            val nextMapping = linkedMapOf<String, MappingValue>()
             var removedCount = 0
-            readMapping(filePath).forEach { (branchName, requirementName) ->
+            readMapping(filePath).forEach { (branchName, value) ->
                 if (targetBranchNames.contains(branchName)) {
                     removedCount += 1
                 } else {
-                    nextMapping[branchName] = requirementName
+                    nextMapping[branchName] = value
                 }
             }
             if (removedCount == 0) {
@@ -76,14 +83,13 @@ class BranchMappingFileRepository {
 
             val content = json.encodeToString(nextMapping)
             Files.writeString(filePath, content, StandardCharsets.UTF_8)
-            VfsUtil.markDirtyAndRefresh(false, false, false, filePath.toFile())
             SaveResult.Success(removedCount)
         }.getOrElse { error ->
             SaveResult.Failure("写入文件失败：${error.message ?: "未知错误"}")
         }
     }
 
-    private fun readMapping(filePath: Path): Map<String, String> {
+    private fun readMapping(filePath: Path): Map<String, MappingValue> {
         if (!Files.exists(filePath)) {
             return emptyMap()
         }
@@ -92,15 +98,47 @@ class BranchMappingFileRepository {
         if (content.isEmpty()) {
             return emptyMap()
         }
-        return json.decodeFromString(content)
+        return normalizeMapping(json.parseToJsonElement(content))
     }
 
-    private fun toItems(mapping: Map<String, String>): List<BranchMappingItem> {
+    private fun normalizeMapping(element: JsonElement): Map<String, MappingValue> {
+        val mappingObject = element as? JsonObject
+            ?: throw IllegalStateException("映射文件格式错误：根节点必须是对象")
+
+        return mappingObject.entries.associate { (branchName, value) ->
+            branchName to value.toMappingValue(branchName)
+        }
+    }
+
+    private fun JsonElement.toMappingValue(branchName: String): MappingValue {
+        val objectValue = this as? JsonObject
+        if (objectValue != null) {
+            val requirementName = objectValue["requirementName"]?.jsonPrimitive?.contentOrNull
+                ?: throw IllegalStateException("映射文件格式错误：$branchName 缺少 requirementName")
+
+            return MappingValue(
+                requirementName = requirementName,
+                updatedAt = objectValue["updatedAt"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+            )
+        }
+
+        val stringValue = jsonPrimitive.contentOrNull
+        if (stringValue != null) {
+            return MappingValue(requirementName = stringValue)
+        }
+
+        throw IllegalStateException("映射文件格式错误：$branchName 的值必须是字符串或对象")
+    }
+
+    private fun toItems(mapping: Map<String, MappingValue>): List<BranchMappingItem> {
         return mapping.entries
-            .map { (branchName, requirementName) ->
-                BranchMappingItem(branchName = branchName, requirementName = requirementName)
+            .map { (branchName, value) ->
+                BranchMappingItem(
+                    branchName = branchName,
+                    requirementName = value.requirementName,
+                    updatedAt = value.updatedAt,
+                )
             }
-            .sortedBy { it.branchName.lowercase() }
     }
 
     private fun resolveMappingFilePath(): Path {
@@ -141,4 +179,10 @@ class BranchMappingFileRepository {
             prettyPrint = true
         }
     }
+
+    @kotlinx.serialization.Serializable
+    private data class MappingValue(
+        val requirementName: String,
+        val updatedAt: String = "",
+    )
 }

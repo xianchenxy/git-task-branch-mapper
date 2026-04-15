@@ -9,10 +9,13 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.project.Project
 import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
+import com.intellij.ui.jcef.JBCefBrowserBase
 import com.intellij.ui.jcef.JBCefJSQuery
 import git4idea.repo.GitRepositoryManager
 import java.awt.BorderLayout
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
@@ -34,9 +37,14 @@ class BranchMappingToolWindowContent(
     private val repository = BranchMappingFileRepository()
     private val stateJson = Json { encodeDefaults = true }
     private val queryJson = Json { ignoreUnknownKeys = true }
+    private val requestedReloadVersion = AtomicInteger(0)
+    private val appliedReloadVersion = AtomicInteger(0)
+    private val reloadInFlight = AtomicBoolean(false)
 
     private var browser: JBCefBrowser? = null
     private var jsQuery: JBCefJSQuery? = null
+    @Volatile
+    private var disposed = false
 
     val component: JComponent = createComponent()
 
@@ -50,7 +58,7 @@ class BranchMappingToolWindowContent(
         val jcefBrowser = JBCefBrowser("about:blank")
         browser = jcefBrowser
 
-        val frontendQuery = JBCefJSQuery.create(jcefBrowser)
+        val frontendQuery = JBCefJSQuery.create(jcefBrowser as JBCefBrowserBase)
         jsQuery = frontendQuery
         frontendQuery.addHandler { payload ->
             handleFrontendCommand(payload)
@@ -149,16 +157,42 @@ class BranchMappingToolWindowContent(
     }
 
     private fun requestStateReload() {
+        requestedReloadVersion.incrementAndGet()
+        if (!reloadInFlight.compareAndSet(false, true)) {
+            return
+        }
+
         ApplicationManager.getApplication().executeOnPooledThread {
-            val viewState = toViewState(
-                result = repository.load(project),
-                defaultBranchName = resolveCurrentBranchName(),
-            )
-            ApplicationManager.getApplication().invokeLater {
-                val jcefBrowser = browser ?: return@invokeLater
-                val payload = stateJson.encodeToString(viewState)
-                val script = "window.BranchMappingApp && window.BranchMappingApp.setState($payload);"
-                jcefBrowser.cefBrowser.executeJavaScript(script, jcefBrowser.cefBrowser.url, 0)
+            try {
+                while (!disposed && !project.isDisposed) {
+                    val targetVersion = requestedReloadVersion.get()
+                    val viewState = toViewState(
+                        result = repository.load(project),
+                        defaultBranchName = resolveCurrentBranchName(),
+                    )
+                    ApplicationManager.getApplication().invokeLater {
+                        if (disposed || project.isDisposed) {
+                            return@invokeLater
+                        }
+
+                        val jcefBrowser = browser ?: return@invokeLater
+                        val payload = stateJson.encodeToString(viewState)
+                        val script = "window.BranchMappingApp && window.BranchMappingApp.setState($payload);"
+                        jcefBrowser.cefBrowser.executeJavaScript(script, jcefBrowser.cefBrowser.url, 0)
+                    }
+                    appliedReloadVersion.set(targetVersion)
+
+                    if (requestedReloadVersion.get() == targetVersion) {
+                        break
+                    }
+                }
+            } finally {
+                reloadInFlight.set(false)
+                if (!disposed && !project.isDisposed &&
+                    requestedReloadVersion.get() != appliedReloadVersion.get()
+                ) {
+                    requestStateReload()
+                }
             }
         }
     }
@@ -244,6 +278,7 @@ class BranchMappingToolWindowContent(
     }
 
     override fun dispose() {
+        disposed = true
         jsQuery?.dispose()
         browser?.dispose()
         jsQuery = null
@@ -423,6 +458,12 @@ class BranchMappingToolWindowContent(
                   font-size: 13px;
                   color: #1f2937;
                   word-break: break-all;
+                }
+
+                .result-item .updated-at {
+                  margin-top: 6px;
+                  font-size: 12px;
+                  color: #6b7280;
                 }
 
                 .copy-button {
@@ -650,12 +691,38 @@ class BranchMappingToolWindowContent(
                   requirement.className = 'requirement';
                   requirement.textContent = item.requirementName;
 
+                  const updatedAt = document.createElement('div');
+                  updatedAt.className = 'updated-at';
+                  updatedAt.textContent = formatUpdatedAt(item.updatedAt);
+
                   head.appendChild(branch);
                   head.appendChild(copyButton);
                   container.appendChild(head);
                   container.appendChild(requirement);
+                  container.appendChild(updatedAt);
                   row.appendChild(container);
                   return row;
+                }
+
+                function formatUpdatedAt(value) {
+                  if (!value) {
+                    return '更新时间：未知';
+                  }
+
+                  const date = new Date(value);
+                  if (Number.isNaN(date.getTime())) {
+                    return '更新时间：未知';
+                  }
+
+                  return '更新时间：' + new Intl.DateTimeFormat('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false,
+                  }).format(date);
                 }
 
                 function fallbackCopyText(value) {

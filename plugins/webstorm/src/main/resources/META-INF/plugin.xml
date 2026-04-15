@@ -1,0 +1,12 @@
+<idea-plugin>
+    <depends>com.intellij.modules.platform</depends>
+    <depends>Git4Idea</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow
+                id="Git Task Branch Mapper"
+                anchor="left"
+                icon="/icons/toolWindowIcon.svg"
+                factoryClass="com.branchmapping.plugin.ui.BranchMappingToolWindowFactory"/>
+    </extensions>
+</idea-plugin>

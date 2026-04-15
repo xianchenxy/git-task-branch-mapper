@@ -6,4 +6,5 @@ import kotlinx.serialization.Serializable
 data class BranchMappingItem(
     val branchName: String,
     val requirementName: String,
+    val updatedAt: String = "",
 )

@@ -12,5 +12,11 @@ docs
 node_modules/
 build/
 out/
+plugins/webstorm/.gradle/
+plugins/webstorm/.intellijPlatform/
+plugins/webstorm/build/
+plugins/vscode/node_modules/
+plugins/vscode/dist/
+AGENTS.md
 branch-mapping.json
 git-branch-mapping.json

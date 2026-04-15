@@ -1,0 +1,86 @@
+{
+  "name": "git-task-branch-mapper",
+  "displayName": "Git Task Branch Mapper",
+  "description": "Search and manage requirement-to-branch mappings from a dedicated VS Code sidebar.",
+  "version": "0.1.2",
+  "publisher": "xianchenxy",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xianchenxy/git-task-branch-mapper.git"
+  },
+  "homepage": "https://github.com/xianchenxy/git-task-branch-mapper/tree/main/plugins/vscode",
+  "bugs": {
+    "url": "https://github.com/xianchenxy/git-task-branch-mapper/issues"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "keywords": [
+    "git",
+    "branch",
+    "requirement",
+    "task",
+    "mapping",
+    "sidebar",
+    "workflow"
+  ],
+  "markdown": "github",
+  "activationEvents": [
+    "onView:gitTaskBranchMapper.view",
+    "onCommand:gitTaskBranchMapper.refresh"
+  ],
+  "main": "./dist/extension.js",
+  "icon": "media/plugin-logo.png",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "gitTaskBranchMapper",
+          "title": "Branch Mapper",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "gitTaskBranchMapper": [
+        {
+          "id": "gitTaskBranchMapper.view",
+          "name": "Git Task Branch Mapper",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "gitTaskBranchMapper.refresh",
+        "title": "Git Task Branch Mapper: Refresh"
+      }
+    ]
+  },
+  "files": [
+    "dist",
+    "media",
+    "LICENSE",
+    "CHANGELOG.md",
+    "package.json",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p ./tsconfig.json",
+    "lint": "eslint .",
+    "package": "vsce package --no-dependencies --allow-missing-repository --out ../../releases/vscode/git-task-branch-mapper-0.1.2.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.3.2",
+    "eslint": "^9.25.1",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.1"
+  }
+}
