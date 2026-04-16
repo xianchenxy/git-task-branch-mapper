@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.branchmapping"
-version = "0.1.2"
+version = "0.1.3"
 
 repositories {
     mavenCentral()
@@ -44,14 +44,14 @@ intellijPlatform {
             """.trimIndent()
         changeNotes =
             """
-            <p><strong>0.1.2</strong> 图标与发布资源修订版本。</p>
+            <p><strong>0.1.3</strong> 兼容性修订版本。</p>
             <ul>
               <li>提供 WebStorm 工具窗口，支持需求名/分支名双字段搜索</li>
               <li>支持新增、复制、删除映射，并在写入后立即刷新</li>
               <li>支持管理模式批量删除与当前分支默认预填</li>
               <li>兼容桌面 <code>Desktop</code> 与 <code>OneDrive/Desktop</code> 映射文件位置</li>
               <li>修复 <code>JBCefJSQuery</code> 废弃调用，减少 Marketplace 废弃 API 告警</li>
-              <li>新增双端共享节点映射 logo，并同步到插件发布资源</li>
+              <li>移除 <code>until-build</code> 上限，避免未来 IDE 大版本发布时反复触发下架提醒</li>
             </ul>
             """.trimIndent()
         version = project.version.toString()
@@ -62,7 +62,6 @@ intellijPlatform {
 
         ideaVersion {
             sinceBuild = "243"
-            untilBuild = "252.*"
         }
     }
 }
